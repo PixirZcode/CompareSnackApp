@@ -12,6 +12,8 @@ class BookmarksPage extends StatefulWidget {
 class _BookmarksPageState extends State<BookmarksPage> {
   final _firestore = FirebaseFirestore.instance;
   final _auth = FirebaseAuth.instance;
+  List<String> selectedItems = [];
+  bool selectAll = false;
 
   Future<void> _removeBookmark(String docId) async {
     final user = _auth.currentUser;
@@ -38,6 +40,64 @@ class _BookmarksPageState extends State<BookmarksPage> {
     }
   }
 
+  void _toggleSelection(String docId) {
+    setState(() {
+      if (selectedItems.contains(docId)) {
+        selectedItems.remove(docId);
+      } else {
+        selectedItems.add(docId);
+      }
+    });
+  }
+
+  void _toggleSelectAll(List<String> allDocs) {
+    setState(() {
+      if (selectAll) {
+        selectedItems.clear();
+      } else {
+        selectedItems = allDocs;
+      }
+      selectAll = !selectAll;
+    });
+  }
+
+  Future<void> _confirmDelete() async {
+    if (selectedItems.isEmpty) return;
+
+    // ยืนยันการลบ
+    bool? confirmDelete = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('ยืนยันการลบ'),
+        content: Text('คุณต้องการลบบุ๊กมาร์กที่เลือกใช่หรือไม่?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('ยกเลิก'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('ยืนยัน'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmDelete == true) {
+      final user = _auth.currentUser;
+      if (user == null || user.email == null) return;
+
+      for (String docId in selectedItems) {
+        await _removeBookmark(docId);
+      }
+
+      setState(() {
+        selectedItems.clear(); // ล้างรายการที่เลือกหลังจากลบเสร็จ
+        selectAll = false; // รีเซ็ตการเลือกทั้งหมด
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = _auth.currentUser;
@@ -53,7 +113,33 @@ class _BookmarksPageState extends State<BookmarksPage> {
         return false;
       },
       child: Scaffold(
-        appBar: AppBar(title: Text('บุ๊กมาร์ก')),
+        appBar: AppBar(
+          title: Text('บุ๊กมาร์ก'),
+          actions: [
+            if (selectedItems.isNotEmpty)
+              IconButton(
+                icon: Icon(Icons.delete, color: Colors.red),
+                onPressed: _confirmDelete,
+              ),
+            IconButton(
+              icon: Icon(
+                selectAll ? Icons.deselect : Icons.select_all,
+                color: Colors.blue,
+              ),
+              onPressed: () {
+                // รับเอกสารทั้งหมดจาก snapshot เพื่อเลือกทั้งหมด
+                final snapshot = FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(user.email)
+                    .collection('bookmarks');
+                snapshot.get().then((querySnapshot) {
+                  List<String> allDocs = querySnapshot.docs.map((doc) => doc.id).toList();
+                  _toggleSelectAll(allDocs);
+                });
+              },
+            ),
+          ],
+        ),
         body: StreamBuilder(
           stream: _firestore
               .collection('users')
@@ -89,7 +175,7 @@ class _BookmarksPageState extends State<BookmarksPage> {
                         InkWell(
                           onTap: () {
                             final url =
-                                data['id']; // ลิงค์ url ของสินค้า id นั้นๆ
+                            data['id']; // ลิงค์ url ของสินค้า id นั้นๆ
                             _launchURL(url);
                           },
                           child: Text(
@@ -103,8 +189,15 @@ class _BookmarksPageState extends State<BookmarksPage> {
                       ],
                     ),
                     trailing: IconButton(
-                      icon: Icon(Icons.delete, color: Colors.red),
-                      onPressed: () => _removeBookmark(doc.id),
+                      icon: Icon(
+                        selectedItems.contains(doc.id)
+                            ? Icons.check_box
+                            : Icons.check_box_outline_blank,
+                        color: selectedItems.contains(doc.id)
+                            ? Colors.green
+                            : null,
+                      ),
+                      onPressed: () => _toggleSelection(doc.id),
                     ),
                   ),
                 );
