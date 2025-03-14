@@ -25,6 +25,7 @@ class _HomepageState extends State<Homepage> {
   bool isExpanded = false; // ตัวแปรสำหรับควบคุมการแสดงผลของคำค้นหาที่ซ่อนอยู่
   String favIngre = ''; // ตัวแปรสำหรับเก็บ Ingredient ที่เลือก
   String selectedPackageType = 'all'; // all, ชิ้น, แพ็ค
+  String selectedSortOrder = 'lowToHigh'; // ค่าที่ใช้สำหรับจัดเรียง
 
   // แสดงสินค้าเมื่อเปิดแอปด้วยคีย์เวิร์ด Products จากสินค้าทั้ง 2 แหล่ง
   @override
@@ -459,6 +460,24 @@ class _HomepageState extends State<Homepage> {
     }).toList();
   }
 
+  List<Data> getSortedData() {
+    List<Data> filteredData = filterDatas();
+
+    filteredData.sort((a, b) {
+      final valueA = extractValueFromTitle(a.title);
+      final valueB = extractValueFromTitle(b.title);
+
+      final resultA = calculateResult(valueA, a.price);
+      final resultB = calculateResult(valueB, b.price);
+
+      return selectedSortOrder == 'lowToHigh'
+          ? resultA.compareTo(resultB)
+          : resultB.compareTo(resultA);
+    });
+
+    return filteredData;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -604,6 +623,20 @@ class _HomepageState extends State<Homepage> {
                               ),
                             );
                           }).toList(),
+                        ),
+                        Spacer(),
+
+                        DropdownButton<String>(
+                          value: selectedSortOrder,
+                          onChanged: (String? newValue) {
+                            setState(() {
+                              selectedSortOrder = newValue!;
+                            });
+                          },
+                          items: [
+                            DropdownMenuItem(value: 'lowToHigh', child: Text('ราคาต่อหน่วย น้อยไปมาก')),
+                            DropdownMenuItem(value: 'highToLow', child: Text('ราคาต่อหน่วย มากไปน้อย')),
+                          ],
                         ),
                         Spacer(),
 
