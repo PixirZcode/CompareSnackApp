@@ -162,11 +162,11 @@ class _HistoryPageState extends State<HistoryPage> {
                 return Card(
                   margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
                   child: ListTile(
-                    leading: order['image'] != null && order['image'] != ''
+                    leading: order['urlImage'] != null && order['urlImage'] != ''
                         ? Image.network(
-                      order['image'],
-                      width: 50,
-                      height: 50,
+                      order['urlImage'],
+                      width: 70,
+                      height: 70,
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) {
                         return const Icon(Icons.broken_image);
@@ -178,11 +178,16 @@ class _HistoryPageState extends State<HistoryPage> {
                     subtitle: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('ราคา: ${order['price'] ?? 'Not Available'}',
+                        Text('ราคา: ${order['price'] ?? 'Not Available'} บาท',
                             style:
                             const TextStyle(fontSize: 14, color: Colors.green)),
-                        Text('แหล่งที่มาสินค้า: ${order['category'] ?? 'Not Available'}',
+
+                        Text('แหล่งที่มาสินค้า: ${order['shop'] ?? 'Not Available'}',
                             style: const TextStyle(color: Colors.grey)),
+
+                        Text('ความคุ่มค่า: ${order['value'] ?? 'Not Available'}',
+                          style: const TextStyle(color: Colors.red),
+                        ),
                         Text(
                           order['timestamp'] != null
                               ? 'เข้าชมเมื่อ: ${DateFormat('dd/MM/yyyy HH:mm').format(
@@ -190,9 +195,10 @@ class _HistoryPageState extends State<HistoryPage> {
                               : 'เข้าชมเมื่อ: ไม่ระบุ',
                           style: const TextStyle(fontSize: 14, color: Colors.black),
                         ),
+
                         InkWell(
                           onTap: () async {
-                            final url = order['id'];
+                            final url = order['url'];
                             if (url != null && url.isNotEmpty) {
                               final Uri uri = Uri.parse(url);
                               if (await canLaunchUrl(uri)) {

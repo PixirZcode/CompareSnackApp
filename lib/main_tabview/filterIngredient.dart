@@ -20,19 +20,19 @@ class _filterIngredientState extends State<filterIngredient> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   Map<String, bool> selectedIngredients = {
-    'Corn': false,
-    'Cheese': false,
-    'Chocolate': false,
-    'Strawberry': false,
-    'Nori': false,
+    'ข้าวโพด': false,
+    'ชีส': false,
+    'ช็อคโกแลต': false,
+    'สตรอเบอรรี่': false,
+    'สาหร่าย': false,
   };
 
   Map<String, String> ingredientImages = {
-    'Corn': 'assets/img/corn.png',
-    'Cheese': 'assets/img/cheese.png',
-    'Chocolate': 'assets/img/chocolate.png',
-    'Strawberry': 'assets/img/strawberry.png',
-    'Nori': 'assets/img/nori_1.png',
+    'ข้าวโพด': 'assets/img/corn.png',
+    'ชีส': 'assets/img/cheese.png',
+    'ช็อคโกแลต': 'assets/img/chocolate.png',
+    'สตรอเบอรรี่': 'assets/img/strawberry.png',
+    'สาหร่าย': 'assets/img/nori_1.png',
   };
 
 

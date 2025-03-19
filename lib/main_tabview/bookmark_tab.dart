@@ -32,11 +32,45 @@ class _BookmarksPageState extends State<BookmarksPage> {
     }
   }
 
-  void _launchURL(String url) async {
-    if (await canLaunch(url)) {
-      await launch(url);
-    } else {
-      print('ไม่สามารถเปิดลิงก์ได้: $url');
+  // ฟังก์ชันสำหรับเปิด URL และบันทึกประวัติการดูสินค้า
+  Future<void> openUrlAndSaveOrder(Map<String, dynamic> data) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      print('User = null');
+      return;
+    }
+
+    final firestore = FirebaseFirestore.instance;
+
+    try {
+      // บันทึกข้อมูลใน collection 'historys'
+      String imageUrl = data['urlImage'] ?? data['image'];
+
+      await firestore
+          .collection('users')
+          .doc(user.email)
+          .collection('historys')
+          .add({
+        'title': data['title'],
+        'url': data['url'],
+        'urlImage': imageUrl, // ใช้แบบนี้เพราะค่าใน Redis เก็บเป็น image แต่ history ใน firestore เป็น urlImage เลยต้องเลือกอันใดอันนึง
+        'price': data['price'],
+        'unit': data['unit'],
+        'stockStatus': data['stockStatus'],
+        'value': data['value'],
+        'shop': data['shop'],
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+
+      // เปิด URL ใน Browser
+      final Uri uri = Uri.parse(data['url']);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        throw 'ไม่สามารถเปิด URL ได้';
+      }
+    } catch (e) {
+      print('เกิดข้อผิดพลาดในการบันทึกคำสั่งซื้อหรือการเปิด URL: $e');
     }
   }
 
@@ -160,23 +194,24 @@ class _BookmarksPageState extends State<BookmarksPage> {
                 return Card(
                   margin: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
                   child: ListTile(
-                    leading: Image.network(data['image'],
-                        width: 50, height: 50, fit: BoxFit.cover),
+                    leading: Image.network(data['urlImage'],
+                        width: 70, height: 70, fit: BoxFit.cover),
                     title: Text(data['title']),
                     subtitle: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('ราคา: ${data['price'] ?? 'Not Available'}',
+                        Text('ราคา: ${data['price'] ?? 'Not Available'} บาท',
                           style: const TextStyle(fontSize: 14, color: Colors.green),
                         ),
-                        Text('แหล่งที่มาสินค้า: ${data['category'] ?? 'Not Available'}',
+                        Text('แหล่งที่มาสินค้า: ${data['shop'] ?? 'Not Available'}',
                           style: const TextStyle(color: Colors.grey),
+                        ),
+                        Text('ความคุ่มค่า: ${data['value'] ?? 'Not Available'}',
+                          style: const TextStyle(color: Colors.red),
                         ),
                         InkWell(
                           onTap: () {
-                            final url =
-                            data['id']; // ลิงค์ url ของสินค้า id นั้นๆ
-                            _launchURL(url);
+                            openUrlAndSaveOrder(data);
                           },
                           child: Text(
                             'กดเพื่อดูสินค้าต้นทาง',

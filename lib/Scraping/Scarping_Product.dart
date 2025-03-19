@@ -25,11 +25,9 @@ class _Scarping_ProductState extends State<Scarping_Product> {
   String selectedPackageType = 'all'; // all, ชิ้น, แพ็ค
   bool isLoading = false;
 
-  // แสดงสินค้าเมื่อเปิดแอปด้วยคีย์เวิร์ด Products จากสินค้าทั้ง 2 แหล่ง
   @override
   void initState() {
     super.initState();
-    fetchFavIngre(); // ดึงค่าจาก Firestore แล้วใช้ค้นหา
   }
 
   // ดึง ingredients ที่มีค่า true จาก Firestore
@@ -734,28 +732,34 @@ class _Scarping_ProductState extends State<Scarping_Product> {
                       ),
                       Spacer(),
 
-                      GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            if (selectedSortPrice == 'Low to High') {
-                              selectedSortPrice = 'High to Low'; // เปลี่ยนเป็น สูงไปต่ำ▼
-                            } else {
-                              selectedSortPrice = 'Low to High'; // เปลี่ยนเป็น ต่ำไปสูง▲
-                            }
-                            sortPriceDatas(); // เรียกใช้ฟังก์ชัน sortPriceDatas()
-                          });
+                      DropdownButton<String>(
+                        value: selectedSortPrice,
+                        onChanged: (String? newValue) {
+                          if (newValue != null) {
+                            setState(() {
+                              selectedSortPrice = newValue;
+                              sortPriceDatas(); // เรียงลำดับใหม่
+                              final query = _searchController.text.trim().isEmpty ? favIngre : _searchController.text.trim();
+                              getWebsiteData(query, showResultMessage: _searchController.text.trim().isNotEmpty);
+                            });
+                          }
                         },
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Text(
-                            selectedSortPrice == 'Low to High'
-                                ? 'ต่ำไปสูง▲'
-                                : selectedSortPrice == 'High to Low'
-                                ? 'สูงไปต่ำ▼'
-                                : 'ราคา▲▼',
-                            style: const TextStyle(fontSize: 14),
+                        items: [
+                          DropdownMenuItem(
+                            value: 'all',
+                            child: Text('ราคา▲▼'),
                           ),
-                        ),
+                          DropdownMenuItem(
+                            value: 'Low to High',
+                            child: Text('ต่ำไปสูง▲'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'High to Low',
+                            child: Text('สูงไปต่ำ▼'),
+                          ),
+                        ],
+                        underline: Container(), // ซ่อนขีดเส้นใต้ของ Dropdown
+                        style: const TextStyle(fontSize: 14, color: Colors.black),
                       ),
 
                       Spacer(),
@@ -769,7 +773,15 @@ class _Scarping_ProductState extends State<Scarping_Product> {
             const CircularProgressIndicator()
           else if (datas.isEmpty)
             const Expanded(
-              child: Center(child: Text('No results found.')),
+              child: Center(
+                child: Text(
+                  'เริ่มต้นค้นหาสินค้า\nที่คุณอยากค้นหาได้เลย !!',
+                  style: TextStyle(
+                    fontSize: 22, // ปรับขนาดฟอนต์ที่ต้องการ
+                    fontWeight: FontWeight.bold, // เพิ่มความหนาของฟอนต์ (ถ้าต้องการ)
+                  ),
+                ),
+              ),
             )
           else
             Expanded(

@@ -1,12 +1,13 @@
+import 'dart:convert';
+import 'package:redis/redis.dart';
 import 'package:flutter/material.dart';
 import 'package:project/Scraping/Scarping_Product.dart';
 import 'package:project/main_tabview/ImageSlider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:http/http.dart' as http;
 import 'package:project/ocr/google_ocr.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'dart:convert';
+import 'package:string_similarity/string_similarity.dart';
 
 class Homepage extends StatefulWidget {
   const Homepage({super.key});
@@ -17,121 +18,321 @@ class Homepage extends StatefulWidget {
 
 class _HomepageState extends State<Homepage> {
   int currentSlide = 0;
-  List<Data> datas = [];
-  final TextEditingController _searchController = TextEditingController();
-  String resultMessage = ''; // ข้อความสำหรับแสดงผลลัพธ์ค้นหา
-  String selectedSortPrice = 'all'; // sort ราคา
-  String selectedShop = 'all'; // ค่า Dropdown เริ่มต้น all sort shop
-  bool isExpanded = false; // ตัวแปรสำหรับควบคุมการแสดงผลของคำค้นหาที่ซ่อนอยู่
-  String favIngre = ''; // ตัวแปรสำหรับเก็บ Ingredient ที่เลือก
-  String selectedPackageType = 'all'; // all, ชิ้น, แพ็ค
-  String selectedSortOrder = 'lowToHigh'; // ค่าที่ใช้สำหรับจัดเรียง
+  List<Map<String, dynamic>> products = []; // สร้างลิสต์สำหรับเก็บข้อมูลสินค้า
+  Set<String> bookmarkedProductIds = {}; // Set สำหรับเก็บ ID ของสินค้าที่ถูกบุ๊กมาร์ก
+  List<Map<String, dynamic>> filteredProducts = []; // รายการสินค้าที่กรองแล้ว
+  String selectedShop = 'ร้านค้า'; // ตัวแปรเก็บค่าที่เลือกจาก Dropdown
+  String selectedCategory = 'หมวดหมู่'; // ตัวแปรเก็บค่าที่เลือกจาก Dropdown สำหรับหมวดหมู่สินค้า
+  String selectedValue = 'ความคุ้มค่า'; // ตัวแปรเก็บค่าที่เลือกจาก Dropdown สำหรับความคุ้มค่า
+  String selectedPrice = 'ราคา'; // ค่าตัวแปรเลือกค่าเริ่มต้นเป็น "ราคา"
+  RedisConnection redisConnection = RedisConnection();
+  Command? redisClient;
 
   // แสดงสินค้าเมื่อเปิดแอปด้วยคีย์เวิร์ด Products จากสินค้าทั้ง 2 แหล่ง
   @override
   void initState() {
     super.initState();
-    fetchFavIngre(); // ดึงค่าจาก Firestore แล้วใช้ค้นหา
+    initRedis().then((_) {
+      fetchBookmarks().then((_) {
+        fetchProducts(); // โหลดสินค้า หลังจากรู้ข้อมูลบุ๊กมาร์กแล้ว
+      });
+    });
   }
 
-  // ดึง ingredients ที่มีค่า true จาก Firestore
-  Future<void> fetchFavIngre() async {
+  Future<void> initRedis() async {
+    try {
+      // เชื่อมต่อกับ Redis server (เช่นที่ localhost:6379)
+      redisClient = await redisConnection.connect('10.0.0.85', 6379);
+      print("✔ เชื่อมต่อกับ Redis สำเร็จ");
+    } catch (e) {
+      print("❌ ERROR: ไม่สามารถเชื่อมต่อ Redis: $e");
+    }
+  }
+
+  // แสดงข้อมูลสินค้า
+  Future<void> fetchProducts() async {
+    if (redisClient == null) {
+      print("❌ ERROR: redisClient ยังไม่ถูกเชื่อมต่อ");
+      return; // ออกจากฟังก์ชันถ้า redisClient ยังไม่ได้เชื่อมต่อ
+    }
     String userEmail = FirebaseAuth.instance.currentUser?.email ?? '';
     if (userEmail.isEmpty) return;
 
     try {
-      final doc = await FirebaseFirestore.instance.collection('users').doc(userEmail).get();
-      if (doc.exists && doc.data()?['ingredients'] != null) {
-        final ingredients = Map<String, dynamic>.from(doc.data()?['ingredients']);
-        final selectedIngredients = ingredients.entries
-            .where((entry) => entry.value == true)
-            .map((entry) => entry.key)
-            .toList();
+      // เช็คข้อมูลจาก Redis ก่อน
+      final redisBigc = await redisClient!.get('product:bigc');
+      final redisLotus = await redisClient!.get('product:lotus');
 
-        setState(() {
-          favIngre = (selectedIngredients.isNotEmpty ? 'ขนม ' + selectedIngredients.join(', ') : 'ขนม');
-        });
-      }
-    } catch (e) {
-      print('เกิดข้อผิดพลาดในการดึงข้อมูล FavIngre: $e');
-    } finally {
-      getWebsiteData(favIngre, showResultMessage: false); // ใช้ favIngre ในการค้นหาเริ่มต้น
-    }
-  }
+      List<Map<String, dynamic>> fetchedProducts = [];
+      int bigcCount = 0;
+      int lotusCount = 0;
 
-  // method เกี่ยวกับแสดงข้อมูล
-  Future<void> getWebsiteData(String query, {bool showResultMessage = true}) async {
-    setState(() {
-      if (showResultMessage) resultMessage = '';
-    });
-
-    try {
-      final urls = <Uri>[];
-      if (selectedShop == 'bigc' || selectedShop == 'all') {
-        urls.add(Uri.parse('http://10.0.0.85:3000/scrap?query=$query&site=bigc'));
-      }
-      if (selectedShop == 'lotus' || selectedShop == 'all') {
-        urls.add(Uri.parse('http://10.0.0.85:3000/scrap?query=$query&site=lotus'));
+      // ฟังก์ชันค้นหาความคล้ายคลึงระหว่าง ingredients และ title ของสินค้า
+      bool isIngredientMatch(Map<String, dynamic> product, Set<String> ingredients) {
+        for (var ingredient in ingredients) {
+          // ใช้ StringSimilarity เพื่อหาความคล้ายคลึง
+          double similarity = StringSimilarity.compareTwoStrings(product['title'] ?? '', ingredient);
+          if (similarity > 0.3) { // ตั้งไว้ประมาณ 0.2-0.4 กำลังดี
+            return true; // หากพบคำที่คล้ายกัน
+          }
+        }
+        return false; // หากไม่มีคำที่ตรงกันให้คืนค่า false
       }
 
-      final responses = await Future.wait(urls.map((url) => http.get(url)));
-      final List<Data> newDatas = [];
+      // ดึงข้อมูล ingredients ของผู้ใช้
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(userEmail).get();
+      final ingredientsData = userDoc.data()?['ingredients'] ?? {};
 
-      for (final response in responses) {
-        if (response.statusCode == 200) {
-          final List data = json.decode(response.body);
-          newDatas.addAll(data.map((item) => Data(
-            title: item['title'],
-            url: item['url'],
-            urlImage: item['image'],
-            price: item['price'],
-            category: item['category'],
-            isOutOfStock: item['isOutOfStock'],
-          )));
+      // แปลงเป็น Set<String> จาก Map<String, bool> (เก็บเฉพาะคีย์ที่มีค่าเป็น true)
+      Set<String> ingredients = Set<String>.from(ingredientsData.entries
+          .where((entry) => entry.value == true) // เลือกเฉพาะที่มีค่าเป็น true
+          .map((entry) => entry.key) // แปลงคีย์เป็น String
+      );
+
+      if (redisBigc != null && redisLotus != null) {
+        // ถ้ามีข้อมูลใน Redis
+        print("✔ ข้อมูลจาก Redis: BigC และ Lotus");
+
+        final bigcData = jsonDecode(redisBigc) as List<dynamic>;
+        final lotusData = jsonDecode(redisLotus) as List<dynamic>;
+
+        // ตรวจสอบให้แน่ใจว่า bigcData และ lotusData เป็น List
+        if (bigcData is List && lotusData is List) {
+          // ดึงข้อมูลจาก BigC
+          for (var product in bigcData) {
+            if (product is Map<String, dynamic> && bigcCount < 30) {
+              // หากมี ingredient ที่ตรง
+              if (isIngredientMatch(product, ingredients)) {
+                fetchedProducts.add({
+                  'title': product['title'] ?? 'ไม่มีชื่อ',
+                  'url': product['url'] ?? '',
+                  'urlImage': product['image'] ?? '',
+                  'price': product['price'] ?? 0,
+                  'unit': product['unit'] ?? '',
+                  'stockStatus': product['stockStatus'] ?? '',
+                  'value': product['value'] ?? 0,
+                  'shop': 'BigC',
+                });
+                bigcCount++;
+              }
+            }
+          }
+
+          // ดึงข้อมูลจาก Lotus
+          for (var product in lotusData) {
+            if (product is Map<String, dynamic> && lotusCount < 30) {
+              // หากมี ingredient ที่ตรง
+              if (isIngredientMatch(product, ingredients)) {
+                fetchedProducts.add({
+                  'title': product['title'] ?? 'ไม่มีชื่อ',
+                  'url': product['url'] ?? '',
+                  'urlImage': product['image'] ?? '',
+                  'price': product['price'] ?? 0,
+                  'unit': product['unit'] ?? '',
+                  'stockStatus': product['stockStatus'] ?? '',
+                  'value': product['value'] ?? 0,
+                  'shop': 'Lotus',
+                });
+                lotusCount++;
+              }
+            }
+          }
+        } else {
+          print("❌ ข้อมูลจาก Redis ไม่ใช่ List");
+        }
+
+      } else {
+        // ถ้าไม่มีข้อมูลใน Redis, ดึงข้อมูลจาก Firestore
+        print("❌ ไม่มีข้อมูลใน Redis, ดึงข้อมูลจาก Firestore");
+
+        final querySnapshot = await FirebaseFirestore.instance.collection('listproduct').get();
+        print("✔ ดึงข้อมูลจาก Firestore สำเร็จ, จำนวนสินค้า: ${querySnapshot.docs.length}");
+
+        if (querySnapshot.docs.isNotEmpty) {
+          for (var doc in querySnapshot.docs) {
+            final data = doc.data();
+            print("✔ ข้อมูลที่ได้จาก Firestore: $data");
+
+            if (data.containsKey('bigc') && data['bigc'] is List<dynamic>) {
+              for (var product in data['bigc']) {
+                if (product is Map<String, dynamic> && bigcCount < 30) {
+                  // หากมี ingredient ที่ตรง
+                  if (isIngredientMatch(product, ingredients)) {
+                    fetchedProducts.add({
+                      'title': product['title'] ?? 'ไม่มีชื่อ',
+                      'url': product['url'] ?? '',
+                      'urlImage': product['image'] ?? '',
+                      'price': product['price'] ?? 0,
+                      'unit': product['unit'] ?? '',
+                      'stockStatus': product['stockStatus'] ?? '',
+                      'value': product['value'] ?? 0,
+                      'shop': product['shop'] ?? 'BigC',
+                    });
+                    bigcCount++;
+                  }
+                }
+              }
+            }
+
+            if (data.containsKey('lotus') && data['lotus'] is List<dynamic>) {
+              for (var product in data['lotus']) {
+                if (product is Map<String, dynamic> && lotusCount < 30) {
+                  // หากมี ingredient ที่ตรง
+                  if (isIngredientMatch(product, ingredients)) {
+                    fetchedProducts.add({
+                      'title': product['title'] ?? 'ไม่มีชื่อ',
+                      'url': product['url'] ?? '',
+                      'urlImage': product['image'] ?? '',
+                      'price': product['price'] ?? 0,
+                      'unit': product['unit'] ?? '',
+                      'stockStatus': product['stockStatus'] ?? '',
+                      'value': product['value'] ?? 0,
+                      'shop': product['shop'] ?? 'Lotus',
+                    });
+                    lotusCount++;
+                  }
+                }
+              }
+            }
+
+            // หยุดเมื่อดึงครบ 30 รายการจากทั้งสองแหล่ง
+            if (bigcCount >= 30 && lotusCount >= 30) break;
+          }
+
+          // เก็บข้อมูลใน Redis สำหรับการใช้งานครั้งถัดไป
+          await redisClient!.set('product:bigc', jsonEncode(fetchedProducts.where((p) => p['shop'] == 'BigC').toList()));
+          await redisClient!.set('product:lotus', jsonEncode(fetchedProducts.where((p) => p['shop'] == 'Lotus').toList()));
+
+          print("✔ สินค้าที่ดึงมา: $fetchedProducts");
+
+        } else {
+          print("❌ ไม่มีสินค้าใน Firestore");
         }
       }
 
-      final limitedDatas = newDatas.take(60).toList();
-
-      // โหลด bookmarks แล้วเช็คเพิ่มว่าแต่ละสินค้านั้นถูก bookmark มารึยัง
-      final bookmarkedUrls = await fetchBookmarks();
-      for (var data in limitedDatas) {
-        data.isBookmarked = bookmarkedUrls.contains(data.url);
+      // ตั้งค่าสถานะว่าเป็นสินค้าที่ถูกบุ๊กมาร์กหรือไม่
+      for (var product in fetchedProducts) {
+        product['isBookmarked'] = bookmarkedProductIds.contains(product['url']);
       }
 
-      if (mounted) {
-        setState(() {
-          datas = limitedDatas;
-          if (showResultMessage && query != favIngre) {
-            resultMessage = 'ค้นหา "$query เจอ ${datas.length} ผลลัพธ์';
-          }
-          sortPriceDatas();
-        });
-      }
+      setState(() {
+        products = fetchedProducts;
+        filteredProducts = fetchedProducts; // กรองเป็นทั้งหมดในตอนแรก
+      });
+
     } catch (e) {
-      print('พบข้อผิดพลาด: $e');
-    } finally {
-      if (mounted) {
-        setState(() {
-          if (datas.isEmpty && showResultMessage && query != favIngre) {
-            resultMessage = 'ไม่พบผลลัพธ์ "$query"';
-          }
-        });
+      print("❌ ERROR: $e");
+    }
+  }
+
+  // ฟังก์ชันกรองสินค้า
+  void filterAndSortProducts(String shop, String category, String value, String price) {
+    List<Map<String, dynamic>> tempProducts = products.where((product) {
+      // กรองสินค้าตามร้านค้า
+      bool matchesShop = (shop == 'ร้านค้า') || (product['shop'] == shop);
+
+      // กรองสินค้าตามหมวดหมู่
+      bool matchesCategory = (category == 'หมวดหมู่') ||
+          (category == 'ชิ้น' && product['unit'] != 'แพ็ค') ||
+          (category == 'แพ็ค' && product['unit'] == 'แพ็ค');
+
+      // กรองสินค้าตามความคุ้มค่า
+      bool matchesValue = (value == 'ความคุ้มค่า') ||
+          (value == 'น้อยไปมาก' && product['value'] >= 0) ||
+          (value == 'มากไปน้อย' && product['value'] >= 0);
+
+      return matchesShop && matchesCategory && matchesValue;
+    }).toList();
+
+    // จัดเรียงสินค้าตามราคาที่เลือก
+    if (price == 'น้อยไปมาก') {
+      tempProducts.sort((a, b) => a['price'].compareTo(b['price']));
+    } else if (price == 'มากไปน้อย') {
+      tempProducts.sort((a, b) => b['price'].compareTo(a['price']));
+    }
+
+    setState(() {
+      filteredProducts = tempProducts;
+    });
+  }
+
+  // ฟังก์ชันในการดึงข้อมูลบุ๊กมาร์ก
+  Future<void> fetchBookmarks() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final bookmarksRef = FirebaseFirestore.instance.collection('users').doc(user.email).collection('bookmarks');
+    final snapshot = await bookmarksRef.get();
+
+    setState(() {
+      bookmarkedProductIds = snapshot.docs.map((doc) => doc['url'] as String).toSet();
+    });
+  }
+
+  // เพิ่มข้อมูลสินค้าลงในบุ๊กมาร์ก
+  Future<void> addToBookmarks(Map<String, dynamic> data) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null || user.uid.isEmpty) {
+      print('ผู้ใช้ไม่ได้เข้าสู่ระบบ');
+      return;
+    }
+
+    final _firestore = FirebaseFirestore.instance;
+    final bookmarksRef = _firestore.collection('users').doc(user.email).collection('bookmarks');
+
+    try {
+      await bookmarksRef.add({
+        'title': data['title'],
+        'url': data['url'],
+        'urlImage': data['urlImage'],
+        'price': data['price'],
+        'unit': data['unit'],
+        'stockStatus': data['stockStatus'],
+        'value': data['value'],
+        'shop': data['shop'],
+      });
+
+      setState(() {
+        data['isBookmarked'] = true;
+        bookmarkedProductIds.add(data['url']);
+      });
+
+      print('เพิ่มบุ๊กมาร์กเรียบร้อยแล้ว');
+    } catch (e) {
+      print('เกิดข้อผิดพลาดในการเพิ่มบุ๊กมาร์ก: $e');
+    }
+  }
+
+  // ลบสินค้าจากบุ๊กมาร์ก
+  Future<void> removeFromBookmarks(Map<String, dynamic> data) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null || user.uid.isEmpty) {
+      print('ผู้ใช้ไม่ได้เข้าสู่ระบบ');
+      return;
+    }
+
+    final _firestore = FirebaseFirestore.instance;
+    final bookmarksRef = _firestore.collection('users').doc(user.email).collection('bookmarks');
+
+    try {
+      final querySnapshot = await bookmarksRef.where('url', isEqualTo: data['url']).get();
+      for (var doc in querySnapshot.docs) {
+        await doc.reference.delete();
       }
+
+      setState(() {
+        data['isBookmarked'] = false;
+        bookmarkedProductIds.remove(data['url']);
+      });
+
+      print('ลบบุ๊กมาร์กเรียบร้อยแล้ว');
+    } catch (e) {
+      print('เกิดข้อผิดพลาดในการลบบุ๊กมาร์ก: $e');
     }
   }
 
-  // method นำราคาข้องข้อมูลมาตัดให้เหลือตัวเลขแล้วเรียงราคา น้อย>มาก/มาก>น้อย
-  void sortPriceDatas() {
-    if (selectedSortPrice == 'Low to High') {
-      datas.sort((a, b) => double.tryParse(a.price.replaceAll(RegExp(r'[^\d.]'), ''))?.compareTo(double.tryParse(b.price.replaceAll(RegExp(r'[^\d.]'), '')) ?? 0) ?? 0);
-    } else if (selectedSortPrice == 'High to Low') {
-      datas.sort((a, b) => double.tryParse(b.price.replaceAll(RegExp(r'[^\d.]'), ''))?.compareTo(double.tryParse(a.price.replaceAll(RegExp(r'[^\d.]'), '')) ?? 0) ?? 0);
-    }
-  }
-
-  // method สำหรับเปิดกดเปิดลิงค์แล้วแสดงใน browser
-  Future<void> openUrlAndSaveOrder(Data data) async {
+  // ฟังก์ชันสำหรับเปิด URL และบันทึกประวัติการดูสินค้า
+  Future<void> openUrlAndSaveOrder(Map<String, dynamic> data) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       print('User = null');
@@ -141,21 +342,27 @@ class _HomepageState extends State<Homepage> {
     final firestore = FirebaseFirestore.instance;
 
     try {
+      // บันทึกข้อมูลใน collection 'historys'
+      String imageUrl = data['urlImage'] ?? data['image'];
+
       await firestore
           .collection('users')
           .doc(user.email)
           .collection('historys')
           .add({
-        'id': data.url,
-        'title': data.title,
-        'price': data.price,
-        'image': data.urlImage,
-        'category': data.category,
+        'title': data['title'],
+        'url': data['url'],
+        'urlImage': imageUrl, // ใช้แบบนี้เพราะค่าใน Redis เก็บเป็น image แต่ history ใน firestore เป็น urlImage เลยต้องเลือกอันใดอันนึง
+        'price': data['price'],
+        'unit': data['unit'],
+        'stockStatus': data['stockStatus'],
+        'value': data['value'],
+        'shop': data['shop'],
         'timestamp': FieldValue.serverTimestamp(),
       });
 
-      // เปิด URL ให้ขึ้นใน Browser
-      final Uri uri = Uri.parse(data.url);
+      // เปิด URL ใน Browser
+      final Uri uri = Uri.parse(data['url']);
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
       } else {
@@ -166,316 +373,141 @@ class _HomepageState extends State<Homepage> {
     }
   }
 
-  // ดึงข้อมูล bookmarks จาก firestore
-  Future<Set<String>> fetchBookmarks() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return {};
-
-    final bookmarksRef = FirebaseFirestore.instance.collection('users').doc(user.email).collection('bookmarks');
-    final snapshot = await bookmarksRef.get();
-
-    return snapshot.docs.map((doc) => doc['id'] as String).toSet();
-  }
-
-  // เพิ่มข้อมูล bookmarks เข้า firestore
-  Future<void> addToBookmarks(Data data) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null || user.uid.isEmpty) {
-      print('ผู้ใช้ไม่ได้เข้าสู่ระบบ');
-      return;
-    }
-
-    print('ผู้ใช้ UID: ${user.uid}');
-    final _firestore = FirebaseFirestore.instance;
-
-    final bookmarksPath = 'users/${user.email}/bookmarks';
-    print('Path บุ๊กมาร์ก: $bookmarksPath');
-
-    final bookmarksRef = _firestore.collection('users').doc(user.email).collection('bookmarks');
-    if (user.uid == null || user.uid.trim().isEmpty) {
-      throw Exception('UID ผู้ใช้ไม่ถูกต้อง: ${user.uid}');
-    }
-    final docPath = 'users/${user.email}';
-    if (docPath.contains('//')) {
-      throw Exception('Path Firestore ไม่ถูกต้อง: $docPath');
-    }
-
+  void showComparisonSheet(BuildContext context, String productName) async {
     try {
-      await bookmarksRef.add({
-        'id': data.url,
-        'title': data.title,
-        'price': data.price,
-        'image': data.urlImage,
-        'category': data.category,
-      });
-      setState(() {
-        data.isBookmarked = true;
-      });
-      print('เพิ่มบุ๊กมาร์กเรียบร้อยแล้ว');
-    } catch (e) {
-      print('เกิดข้อผิดพลาดในการเพิ่มบุ๊กมาร์ก: $e');
-    }
-  }
+      List<Map<String, dynamic>> similarProducts = [];
+      double similarityThreshold = 0.6; // ตั้งค่าความคล้ายที่ 60% สูงกว่านี้อาจจะไม่ค่อยเจอ
 
-  // ลบ bookmarks ออกจาก firestore
-  Future<void> removeFromBookmarks(Data data) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null || user.uid.isEmpty) {
-      print('ผู้ใช้ไม่ได้เข้าสู่ระบบ');
-      return;
-    }
+      if (redisClient != null) {
+        // ค้นหาใน Redis
+        final redisBigc = await redisClient!.get('product:bigc');
+        final redisLotus = await redisClient!.get('product:lotus');
 
-    final _firestore = FirebaseFirestore.instance;
+        if (redisBigc != null || redisLotus != null) {
+          print("✔ ค้นหาข้อมูลใน Redis");
 
-    final bookmarksRef = _firestore.collection('users').doc(user.email).collection('bookmarks');
-    try {
-      final querySnapshot = await bookmarksRef.where('id', isEqualTo: data.url).get();
-      for (var doc in querySnapshot.docs) {
-        await doc.reference.delete();
-      }
+          List<dynamic> bigcData = redisBigc != null ? jsonDecode(redisBigc) : [];
+          List<dynamic> lotusData = redisLotus != null ? jsonDecode(redisLotus) : [];
 
-      setState(() {
-        data.isBookmarked = false;
-      });
-      print('ลบบุ๊กมาร์กเรียบร้อยแล้ว');
-    } catch (e) {
-      print('เกิดข้อผิดพลาดในการลบบุ๊กมาร์ก: $e');
-    }
-  }
-
-  // สกัดตัวเลขจากชื่อสินค้า
-  int extractValueFromTitle(String title) {
-    final numbers = RegExp(r'\d+').allMatches(title).map((m) => int.parse(m.group(0)!)).toList();
-    if (numbers.isEmpty) return 1; // ไม่มีตัวเลข
-    return numbers.length > 1 ? numbers[0] * numbers[1] : numbers[0];
-  }
-
-  // method คำนวณความคุ้มค่า
-  double calculateResult(int value, String price) {
-    final priceNumber = double.tryParse(price.replaceAll(RegExp(r'[^\d.]'), '')) ?? 1;
-    return priceNumber > 0 ? value / priceNumber : 0;
-  }
-
-  // สกัดคำ ก. กรัม ออกที่มีในชื่อ
-  String extractProductName(String title) {
-    final regex = RegExp(r'(.*?)(\d+\s?(กรัม|ก\.))?$');
-    final match = regex.firstMatch(title);
-    if (match != null) {
-      return match.group(1)?.trim() ?? '';
-    }
-    return title; // ส่งคืนชื่อเดิมถ้าไม่สามารถทำได้
-  }
-
-  // ดึงข้อมูลสินค้าที่เปรียบเทียบ(ใช้วิธีนำชื่อสินค้าที่สนใจไปค้นหาในเว็บอีกที)
-  Future<List<Data>> fetchComparisonProducts(String productName) async {
-    final urls = <Uri>[
-      Uri.parse('http://10.0.0.85:3000/scrap?query=$productName&site=bigc'),
-      Uri.parse('http://10.0.0.85:3000/scrap?query=$productName&site=lotus'),
-    ];
-
-    try {
-      final responses = await Future.wait(urls.map((url) => http.get(url)));
-
-      final List<Data> comparedProducts = [];
-      for (final response in responses) {
-        if (response.statusCode == 200) {
-          final List data = json.decode(response.body);
-          comparedProducts.addAll(data.map((item) => Data(
-            title: item['title'],
-            url: item['url'],
-            urlImage: item['image'],
-            price: item['price'],
-            category: item['category'],
-            isOutOfStock: item['isOutOfStock'],
-          )));
+          for (var product in [...bigcData, ...lotusData]) {
+            if (product is Map<String, dynamic>) {
+              double similarity = productName.similarityTo(product['title'].toString());
+              if (similarity >= similarityThreshold) {
+                similarProducts.add(product);
+              }
+            }
+          }
         }
       }
-      return comparedProducts;
-    } catch (e) {
-      print('เกิดข้อผิดพลาดในการดึงข้อมูลสินค้าเปรียบเทียบ: $e');
-      return [];
-    }
-  }
 
-  // method สำหรับเปรียบเทียบ และ ส่วนแสดงผล
-  void showComparisonModal(Data data) async {
-    final productName = extractProductName(data.title);
+      if (similarProducts.isEmpty) {
+        // ถ้า Redis ไม่มีข้อมูล ค้นหาใน Firestore แทน
+        print("❌ ไม่พบใน Redis กำลังค้นหาใน Firestore...");
+        final querySnapshot = await FirebaseFirestore.instance.collection('listproduct').get();
 
-    // แสดง showModalBottomSheet
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (BuildContext context) {
-        return Container(
-          padding: const EdgeInsets.all(12.0),
-          height: 500,
-          child: Column(
-            children: [
-              Image.network(
-                data.urlImage,
-                height: 100,
-                width: 100,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, size: 100),
-              ),
-              Text(
-                'เปรียบเทียบ: ${data.title}',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 10),
-              // ตัวโหลดหมุนๆ
-              Expanded(
-                child: Center(
-                  child: CircularProgressIndicator(),
+        for (var doc in querySnapshot.docs) {
+          final data = doc.data();
+
+          // ตรวจสอบใน BigC
+          if (data.containsKey('bigc') && data['bigc'] is List) {
+            for (var product in data['bigc']) {
+              if (product is Map<String, dynamic>) {
+                double similarity = productName.similarityTo(product['title'].toString());
+                if (similarity >= similarityThreshold) {
+                  similarProducts.add(product);
+                }
+              }
+            }
+          }
+
+          // ตรวจสอบใน Lotus
+          if (data.containsKey('lotus') && data['lotus'] is List) {
+            for (var product in data['lotus']) {
+              if (product is Map<String, dynamic>) {
+                double similarity = productName.similarityTo(product['title'].toString());
+                if (similarity >= similarityThreshold) {
+                  similarProducts.add(product);
+                }
+              }
+            }
+          }
+        }
+
+        // บันทึกข้อมูลที่ค้นหาได้ลง Redis เพื่อใช้งานในอนาคต
+        if (redisClient != null && similarProducts.isNotEmpty) {
+          print("✔ บันทึกข้อมูลลง Redis");
+          await redisClient!.set('compare:$productName', jsonEncode(similarProducts));
+        }
+      }
+
+      // จัดเรียงสินค้าที่ได้จาก value มากไปน้อย
+      similarProducts.sort((a, b) {
+        return (b['value'] ?? 0).compareTo(a['value'] ?? 0);
+      });
+
+      // เปิด ModalBottomSheet เพื่อแสดงสินค้าที่ใกล้เคียง
+      showModalBottomSheet(
+        context: context,
+        builder: (context) {
+          return Container(
+            padding: EdgeInsets.all(16),
+            height: 400,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'สินค้าใกล้เคียงกับ: "$productName"',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-
-    // ดึงข้อมูลเปรียบเทียบสินค้า
-    final comparedProducts = await fetchComparisonProducts(productName);
-
-    final List<Map<String, dynamic>> productsWithResults = comparedProducts.map((product) {
-      final value = extractValueFromTitle(product.title);
-      final result = calculateResult(value, product.price);
-      return {
-        'product': product,
-        'result': result,
-      };
-    }).toList();
-
-    productsWithResults.sort((a, b) => b['result'].compareTo(a['result']));
-
-    final sortedProducts = productsWithResults.map((e) => e['product']).toList();
-
-    // ปิดโหลดหมุนๆจากนั้นแสดงผล
-    Navigator.pop(context);
-
-    // ส่วนแสดงผลหลังจากที่เรียงลำดับความคุ้มจากมาก > น้อย
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (BuildContext context) {
-        return Container(
-          padding: const EdgeInsets.all(12.0),
-          height: 500,
-          child: Column(
-            children: [
-              Image.network(
-                data.urlImage,
-                height: 100,
-                width: 100,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, size: 100),
-              ),
-              Text(
-                'เปรียบเทียบ: ${data.title}',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 10),
-              sortedProducts.isNotEmpty
-                  ? Expanded(
-                child: ListView.builder(
-                  itemCount: sortedProducts.length,
-                  itemBuilder: (context, index) {
-                    final comparedProduct = sortedProducts[index];
-                    final value = extractValueFromTitle(comparedProduct.title);
-                    final result = calculateResult(value, comparedProduct.price);
-
-                    return Card(
-                      margin: const EdgeInsets.symmetric(vertical: 5),
-                      child: ListTile(
+                SizedBox(height: 10),
+                Expanded(
+                  child: similarProducts.isEmpty
+                      ? Center(child: Text("ไม่พบสินค้าที่ใกล้เคียง"))
+                      : ListView.builder(
+                    itemCount: similarProducts.length,
+                    itemBuilder: (context, index) {
+                      var product = similarProducts[index];
+                      return ListTile(
                         leading: Image.network(
-                          comparedProduct.urlImage,
-                          height: 50,
+                          product['image'] ?? '',
                           width: 50,
+                          height: 50,
                           fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) =>
-                          const Icon(Icons.broken_image),
                         ),
-                        title: Text(comparedProduct.title),
+                        title: Text(product['title'] ?? 'ไม่มีชื่อ'),
                         subtitle: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'ราคา: ${comparedProduct.price}',
+                              'ราคา: ${product['price']} บาท',
                               style: const TextStyle(color: Colors.green),
                             ),
                             Text(
-                              'แหล่งที่มาสินค้า: ${comparedProduct.category}',
+                              'แหล่งที่มาสินค้า: ${product['shop']}',
                               style: const TextStyle(color: Colors.grey),
                             ),
                             Text(
-                              'ความคุ้มค่า: ${result.toStringAsFixed(2)} กรัม/บาท',
+                              'ความคุ้มค่า: ${product['value']} กรัม/บาท',
                               style: const TextStyle(color: Colors.red),
                             ),
                           ],
                         ),
                         trailing: ElevatedButton(
-                          onPressed: () => openUrlAndSaveOrder(comparedProduct),
+                          onPressed: () => openUrlAndSaveOrder(product),
                           child: const Text('ซื้อ'),
                         ),
-                      ),
-                    );
-                  },
+                      );
+                    },
+                  ),
                 ),
-              )
-                  : const Center(
-                child: Text(
-                  'ไม่มีสินค้าที่ตรงกันในแหล่งต่างๆ',
-                  style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  // กรองชิ้น/แพ็ค
-  List<Data> filterDatas() {
-    return datas.where((data) {
-      final title = data.title.toLowerCase(); // แปลงเป็นตัวพิมพ์เล็ก
-      final RegExp packRegex = RegExp(r'x\s?\d+', caseSensitive: false); // คำว่า 'X' ตามด้วยตัวเลข เช่น X10, X 10
-      final RegExp packBoxRegex = RegExp(r'\d+\s?ซอง', caseSensitive: false); // คำว่า 'ซอง' ตามด้วยตัวเลข เช่น 10ซอง, 10 ซอง
-      final RegExp packFongRegex = RegExp(r'\d+\s?ฟอง', caseSensitive: false); // คำว่า 'ฟอง' ตามด้วยตัวเลข เช่น 10ฟอง, 10 ฟอง
-
-      final isPack = title.contains('แพ็ค') || packRegex.hasMatch(title) || packBoxRegex.hasMatch(title) || packFongRegex.hasMatch(title);
-
-      if (selectedPackageType == 'all') {
-        return true; // แสดงทั้งหมด
-      } else if (selectedPackageType == 'pack') {
-        return isPack; // แสดงเฉพาะแพ็ค
-      } else {
-        return !isPack; // แสดงเฉพาะชิ้น
-      }
-    }).toList();
-  }
-
-  List<Data> getSortedData() {
-    List<Data> filteredData = filterDatas();
-
-    filteredData.sort((a, b) {
-      final valueA = extractValueFromTitle(a.title);
-      final valueB = extractValueFromTitle(b.title);
-
-      final resultA = calculateResult(valueA, a.price);
-      final resultB = calculateResult(valueB, b.price);
-
-      return selectedSortOrder == 'lowToHigh'
-          ? resultA.compareTo(resultB)
-          : resultB.compareTo(resultA);
-    });
-
-    return filteredData;
+              ],
+            ),
+          );
+        },
+      );
+    } catch (e) {
+      print("❌ ERROR: $e");
+    }
   }
 
   @override
@@ -584,97 +616,74 @@ class _HomepageState extends State<Homepage> {
                     height: 50,
                     child: Row(
                       children: [
-                        // ส่วน Dropdown
+                        // Dropdown สำหรับเลือกหมวดหมู่สินค้า
                         Spacer(),
                         DropdownButton<String>(
                           value: selectedShop,
-                          onChanged: (String? newValue) {
-                            setState(() {
-                              selectedShop = newValue ?? 'all';
-                              final query = _searchController.text.trim().isEmpty ? favIngre : _searchController.text.trim();
-                              getWebsiteData(query, showResultMessage: _searchController.text.trim().isNotEmpty);
-                            });
-                          },
-                          items: <String>['all', 'bigc', 'lotus']
-                              .map<DropdownMenuItem<String>>((String value) {
-                            String displayValue = value == 'all' ? 'ร้านค้า' : value.toUpperCase();
-                            return DropdownMenuItem<String>(
-                              value: value,
-                              child: Text(displayValue, style: TextStyle(fontSize: 14)),
-                            );
-                          }).toList(),
-                        ),
-
-                        Spacer(),
-                        DropdownButton<String>(
-                          value: selectedPackageType,
-                          onChanged: (String? newValue) {
-                            setState(() {
-                              selectedPackageType = newValue ?? 'all';
-                            });
-                          },
-                          items: <String>['all', 'piece', 'pack']
-                              .map<DropdownMenuItem<String>>((String value) {
-                            return DropdownMenuItem<String>(
-                              value: value,
-                              child: Text(
-                                value == 'all' ? 'หมวดหมู่' : value == 'piece' ? 'ชิ้น' : 'แพ็ค',
-                                style: const TextStyle(fontSize: 14),
-                              ),
-                            );
-                          }).toList(),
-                        ),
-                        Spacer(),
-
-                        DropdownButton<String>(
-                          value: selectedSortOrder,
-                          onChanged: (String? newValue) {
-                            setState(() {
-                              selectedSortOrder = newValue!;
-                            });
-                          },
                           items: [
-                            DropdownMenuItem(value: 'lowToHigh', child: Text('ราคาต่อหน่วย น้อยไปมาก')),
-                            DropdownMenuItem(value: 'highToLow', child: Text('ราคาต่อหน่วย มากไปน้อย')),
+                            DropdownMenuItem(value: 'ร้านค้า', child: Text('ร้านค้า')),
+                            DropdownMenuItem(value: 'BigC', child: Text('BigC')),
+                            DropdownMenuItem(value: 'Lotus', child: Text('Lotus')),
                           ],
+                          onChanged: (value) {
+                            setState(() {
+                              selectedShop = value ?? 'ร้านค้า';
+                            });
+                            filterAndSortProducts(selectedShop, selectedCategory, selectedValue, selectedPrice); // เรียกฟังก์ชันกรองและจัดเรียง
+                          },
                         ),
                         Spacer(),
-
-                        GestureDetector(
-                          onTap: () {
+                        // Dropdown สำหรับเลือกหมวดหมู่ (ชิ้น หรือ แพ็ค)
+                        DropdownButton<String>(
+                          value: selectedCategory,
+                          items: [
+                            DropdownMenuItem(value: 'หมวดหมู่', child: Text('หมวดหมู่')),
+                            DropdownMenuItem(value: 'ชิ้น', child: Text('ชิ้น')),
+                            DropdownMenuItem(value: 'แพ็ค', child: Text('แพ็ค')),
+                          ],
+                          onChanged: (value) {
                             setState(() {
-                              if (selectedSortPrice == 'Low to High') {
-                                selectedSortPrice = 'High to Low'; // เปลี่ยนเป็น สูงไปต่ำ▼
-                              } else {
-                                selectedSortPrice = 'Low to High'; // เปลี่ยนเป็น ต่ำไปสูง▲
-                              }
-                              sortPriceDatas(); // เรียกใช้ฟังก์ชัน sortPriceDatas()
+                              selectedCategory = value ?? 'หมวดหมู่';
                             });
+                            filterAndSortProducts(selectedShop, selectedCategory, selectedValue, selectedPrice); // เรียกฟังก์ชันกรองและจัดเรียง
                           },
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            child: Text(
-                              selectedSortPrice == 'Low to High'
-                                  ? 'ต่ำไปสูง▲'
-                                  : selectedSortPrice == 'High to Low'
-                                  ? 'สูงไปต่ำ▼'
-                                  : 'ราคา▲▼',
-                              style: const TextStyle(fontSize: 14),
-                            ),
-                          ),
                         ),
-
+                        Spacer(),
+                        // Dropdown สำหรับเลือกความคุ้มค่า
+                        DropdownButton<String>(
+                          value: selectedValue,
+                          items: [
+                            DropdownMenuItem(value: 'ความคุ้มค่า', child: Text('ความคุ้มค่า')),
+                            DropdownMenuItem(value: 'น้อยไปมาก', child: Text('ต่ำไปสูง▲')),
+                            DropdownMenuItem(value: 'มากไปน้อย', child: Text('สูงไปต่ำ▼')),
+                          ],
+                          onChanged: (value) {
+                            setState(() {
+                              selectedValue = value ?? 'ความคุ้มค่า';
+                            });
+                            filterAndSortProducts(selectedShop, selectedCategory, selectedValue, selectedPrice); // เรียกฟังก์ชันกรองและจัดเรียง
+                          },
+                        ),
+                        Spacer(),
+                        DropdownButton<String>(
+                          value: selectedPrice,
+                          items: [
+                            DropdownMenuItem(value: 'ราคา', child: Text('ราคา')),
+                            DropdownMenuItem(value: 'น้อยไปมาก', child: Text('ต่ำไปสูง▲')),
+                            DropdownMenuItem(value: 'มากไปน้อย', child: Text('สูงไปต่ำ▼')),
+                          ],
+                          onChanged: (value) {
+                            setState(() {
+                              selectedPrice = value ?? 'ความคุ้มค่า';
+                            });
+                            filterAndSortProducts(selectedShop, selectedCategory, selectedValue, selectedPrice); // เรียกฟังก์ชันกรองและจัดเรียง
+                          },
+                        ),
                         Spacer(),
                       ],
                     ),
                   ),
                   SizedBox(height: 20),
-
-                  /*Container(
-                height: 300,
-                child: Image.asset("assets/img/logo_khanom.png")
-              ),
-              SizedBox(height: 20),*/
 
                   Align(
                     alignment: Alignment.centerLeft,
@@ -685,12 +694,9 @@ class _HomepageState extends State<Homepage> {
                   ),
                   SizedBox(height: 20),
 
-                  /*if (datas.isEmpty)
-                    const Text("ไม่พบผลลัพธ์")
-                  else*/
-
+                  // แสดงสินค้าใน GridView.builder
                   GridView.builder(
-                    itemCount: filterDatas().length,
+                    itemCount: filteredProducts.length,
                     shrinkWrap: true,
                     physics: NeverScrollableScrollPhysics(),
                     gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -699,8 +705,8 @@ class _HomepageState extends State<Homepage> {
                       crossAxisSpacing: 2,
                     ),
                     itemBuilder: (context, index) {
-                      final data = filterDatas()[index];
-                      bool isOutOfStock = data.isOutOfStock == "สินค้าจะมีเร็วๆนี้";
+                      final data = filteredProducts[index];
+                      bool isOutOfStock = data['stockStatus'] != 'Y' && data['stockStatus'] != 'IN_STOCK';
 
                       return Container(
                         color: isOutOfStock ? Colors.grey[300] : null,
@@ -715,36 +721,30 @@ class _HomepageState extends State<Homepage> {
                                   height: 150,
                                   child: Stack(
                                     children: [
-                                      InkWell(
-                                        onTap: () => openUrlAndSaveOrder(data),
-                                        child: ClipRRect(
-                                          borderRadius: BorderRadius.circular(15),
-                                          child: data.urlImage.isNotEmpty
-                                              ? Image.network(
-                                            data.urlImage,
-                                            fit: BoxFit.cover,
-                                            errorBuilder: (context, error, stackTrace) {
-                                              return const Icon(Icons.broken_image);
-                                            },
-                                          )
-                                              : const Icon(Icons.broken_image),
-                                        ),
+                                      Image.network(
+                                        data['urlImage'],
+                                        height: 150,
+                                        width: double.infinity,
+                                        fit: BoxFit.cover,
                                       ),
                                       Positioned(
                                         right: 10,
                                         top: 10,
                                         child: IconButton(
                                           onPressed: () {
-                                            if (data.isBookmarked) {
+                                            // เพิ่มหรือลบบุ๊กมาร์กเมื่อกดปุ่ม
+                                            if (data['isBookmarked']) {
                                               removeFromBookmarks(data);
                                             } else {
                                               addToBookmarks(data);
                                             }
                                           },
                                           icon: Icon(
-                                            data.isBookmarked ? Icons.favorite : Icons.favorite_border,
-                                            color: data.isBookmarked ? Color(0xFFDB3022) : null,
+                                            data['isBookmarked']
+                                                ? Icons.favorite
+                                                : Icons.favorite_border,
                                           ),
+                                          color: data['isBookmarked'] ? Colors.pink : Colors.black,
                                           iconSize: 30,
                                         ),
                                       )
@@ -752,9 +752,7 @@ class _HomepageState extends State<Homepage> {
                                   ),
                                 ),
                                 Text(
-                                  data.title.isNotEmpty
-                                      ? data.title
-                                      : 'ชื่อสินค้าไม่พร้อมใช้งาน',
+                                  data['title'],
                                   style: TextStyle(fontSize: 14),
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
@@ -766,13 +764,9 @@ class _HomepageState extends State<Homepage> {
                                       color: Colors.amber,
                                     ),
                                     Text(
-                                      data.price.isNotEmpty && data.price != 'Not Available'
-                                          ? 'ราคา: ${data.price}'
-                                          : 'ราคาไม่พร้อมใช้งาน',
+                                      "ราคา: ${data['price']} บาท",
                                       style: TextStyle(
-                                        color: data.price.isNotEmpty && data.price != 'Not Available'
-                                            ? Colors.green
-                                            : Colors.red,
+                                        color: Colors.green,
                                         fontWeight: FontWeight.bold,
                                         fontSize: 12,
                                       ),
@@ -780,9 +774,7 @@ class _HomepageState extends State<Homepage> {
                                   ],
                                 ),
                                 Text(
-                                  data.category.isNotEmpty
-                                      ? 'แหล่งที่มาสินค้า: ${data.category}'
-                                      : 'แหล่งที่มาสินค้าไม่พร้อมใช้งาน',
+                                  "แหล่งที่มา: ${data['shop']}",
                                   style: const TextStyle(
                                     color: Colors.grey,
                                     fontStyle: FontStyle.italic,
@@ -791,13 +783,11 @@ class _HomepageState extends State<Homepage> {
                                 ),
                                 Builder(
                                   builder: (context) {
-                                    final value = extractValueFromTitle(data.title);
-                                    final result = calculateResult(value, data.price);
                                     return Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          'ความคุ้มค่า: ${result.toStringAsFixed(2)} กรัม/บาท',
+                                          'ความคุ้มค่า: ${data['value']} กรัม/บาท',
                                           style: TextStyle(
                                             color: Colors.deepOrangeAccent,
                                             fontSize: 12,
@@ -822,7 +812,7 @@ class _HomepageState extends State<Homepage> {
                                       ),
                                     ),
                                     TextButton(
-                                      onPressed: () => showComparisonModal(data),
+                                      onPressed: () => showComparisonSheet(context, data['title']),
                                       style: TextButton.styleFrom(
                                         backgroundColor: Colors.blue,
                                         padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -865,24 +855,4 @@ class _HomepageState extends State<Homepage> {
       ),
     );
   }
-}
-
-class Data {
-  final String url;
-  final String title;
-  final String urlImage;
-  final String price;
-  final String category;
-  bool isBookmarked;
-  final String? isOutOfStock;  // Make this nullable
-
-  Data({
-    required this.url,
-    required this.title,
-    required this.urlImage,
-    required this.price,
-    required this.category,
-    this.isBookmarked = false,
-    this.isOutOfStock,  // No default value needed
-  });
 }
