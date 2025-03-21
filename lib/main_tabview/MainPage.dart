@@ -1,13 +1,14 @@
 import 'dart:convert';
 import 'package:redis/redis.dart';
 import 'package:flutter/material.dart';
-import 'package:project/Scraping/Scarping_Product.dart';
+import 'package:project/main_tabview/Search_Product.dart';
 import 'package:project/main_tabview/ImageSlider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:project/ocr/google_ocr.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:string_similarity/string_similarity.dart';
+import 'showModalSheet.dart';
 
 class Homepage extends StatefulWidget {
   const Homepage({super.key});
@@ -373,142 +374,6 @@ class _HomepageState extends State<Homepage> {
     }
   }
 
-  void showComparisonSheet(BuildContext context, String productName) async {
-    try {
-      List<Map<String, dynamic>> similarProducts = [];
-      double similarityThreshold = 0.6; // ตั้งค่าความคล้ายที่ 60% สูงกว่านี้อาจจะไม่ค่อยเจอ
-
-      if (redisClient != null) {
-        // ค้นหาใน Redis
-        final redisBigc = await redisClient!.get('product:bigc');
-        final redisLotus = await redisClient!.get('product:lotus');
-
-        if (redisBigc != null || redisLotus != null) {
-          print("✔ ค้นหาข้อมูลใน Redis");
-
-          List<dynamic> bigcData = redisBigc != null ? jsonDecode(redisBigc) : [];
-          List<dynamic> lotusData = redisLotus != null ? jsonDecode(redisLotus) : [];
-
-          for (var product in [...bigcData, ...lotusData]) {
-            if (product is Map<String, dynamic>) {
-              double similarity = productName.similarityTo(product['title'].toString());
-              if (similarity >= similarityThreshold) {
-                similarProducts.add(product);
-              }
-            }
-          }
-        }
-      }
-
-      if (similarProducts.isEmpty) {
-        // ถ้า Redis ไม่มีข้อมูล ค้นหาใน Firestore แทน
-        print("❌ ไม่พบใน Redis กำลังค้นหาใน Firestore...");
-        final querySnapshot = await FirebaseFirestore.instance.collection('listproduct').get();
-
-        for (var doc in querySnapshot.docs) {
-          final data = doc.data();
-
-          // ตรวจสอบใน BigC
-          if (data.containsKey('bigc') && data['bigc'] is List) {
-            for (var product in data['bigc']) {
-              if (product is Map<String, dynamic>) {
-                double similarity = productName.similarityTo(product['title'].toString());
-                if (similarity >= similarityThreshold) {
-                  similarProducts.add(product);
-                }
-              }
-            }
-          }
-
-          // ตรวจสอบใน Lotus
-          if (data.containsKey('lotus') && data['lotus'] is List) {
-            for (var product in data['lotus']) {
-              if (product is Map<String, dynamic>) {
-                double similarity = productName.similarityTo(product['title'].toString());
-                if (similarity >= similarityThreshold) {
-                  similarProducts.add(product);
-                }
-              }
-            }
-          }
-        }
-
-        // บันทึกข้อมูลที่ค้นหาได้ลง Redis เพื่อใช้งานในอนาคต
-        if (redisClient != null && similarProducts.isNotEmpty) {
-          print("✔ บันทึกข้อมูลลง Redis");
-          await redisClient!.set('compare:$productName', jsonEncode(similarProducts));
-        }
-      }
-
-      // จัดเรียงสินค้าที่ได้จาก value มากไปน้อย
-      similarProducts.sort((a, b) {
-        return (b['value'] ?? 0).compareTo(a['value'] ?? 0);
-      });
-
-      // เปิด ModalBottomSheet เพื่อแสดงสินค้าที่ใกล้เคียง
-      showModalBottomSheet(
-        context: context,
-        builder: (context) {
-          return Container(
-            padding: EdgeInsets.all(16),
-            height: 400,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'สินค้าใกล้เคียงกับ: "$productName"',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                SizedBox(height: 10),
-                Expanded(
-                  child: similarProducts.isEmpty
-                      ? Center(child: Text("ไม่พบสินค้าที่ใกล้เคียง"))
-                      : ListView.builder(
-                    itemCount: similarProducts.length,
-                    itemBuilder: (context, index) {
-                      var product = similarProducts[index];
-                      return ListTile(
-                        leading: Image.network(
-                          product['image'] ?? '',
-                          width: 50,
-                          height: 50,
-                          fit: BoxFit.cover,
-                        ),
-                        title: Text(product['title'] ?? 'ไม่มีชื่อ'),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'ราคา: ${product['price']} บาท',
-                              style: const TextStyle(color: Colors.green),
-                            ),
-                            Text(
-                              'แหล่งที่มาสินค้า: ${product['shop']}',
-                              style: const TextStyle(color: Colors.grey),
-                            ),
-                            Text(
-                              'ความคุ้มค่า: ${product['value']} กรัม/บาท',
-                              style: const TextStyle(color: Colors.red),
-                            ),
-                          ],
-                        ),
-                        trailing: ElevatedButton(
-                          onPressed: () => openUrlAndSaveOrder(product),
-                          child: const Text('ซื้อ'),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
-      );
-    } catch (e) {
-      print("❌ ERROR: $e");
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -528,7 +393,7 @@ class _HomepageState extends State<Homepage> {
                           // เมื่อกดที่ Container จะพาไปหน้า Scrapping()
                           Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (context) => Scarping_Product()),
+                            MaterialPageRoute(builder: (context) => Search_Product()),
                           );
                         },
                         child: Container(

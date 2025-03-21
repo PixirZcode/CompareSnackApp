@@ -194,8 +194,12 @@ class _BookmarksPageState extends State<BookmarksPage> {
                 return Card(
                   margin: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
                   child: ListTile(
-                    leading: Image.network(data['urlImage'],
-                        width: 70, height: 70, fit: BoxFit.cover),
+                    leading: Image.network(
+                        data['urlImage'],
+                        width: 70,
+                        height: 70,
+                        fit: BoxFit.cover
+                    ),
                     title: Text(data['title']),
                     subtitle: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
