@@ -204,24 +204,29 @@ class _Search_ProductState extends State<Search_Product> {
 
   // ฟังก์ชันกรองสินค้า
   void filterAndSortProducts(String shop, String category, String value, String price) {
-    List<Map<String, dynamic>> tempProducts = products.where((product) {
-      // กรองสินค้าตามร้านค้า
-      bool matchesShop = (shop == 'ร้านค้า') || (product['shop'] == shop);
+    print("🔍 Filtering with: shop=$shop, category=$category, value=$value, price=$price");
 
-      // กรองสินค้าตามหมวดหมู่
+    List<Map<String, dynamic>> tempProducts = products.where((product) {
+      bool matchesShop = (shop == 'ร้านค้า') || (product['shop'] == shop);
       bool matchesCategory = (category == 'หมวดหมู่') ||
           (category == 'ชิ้น' && product['unit'] != 'แพ็ค') ||
           (category == 'แพ็ค' && product['unit'] == 'แพ็ค');
 
-      // กรองสินค้าตามความคุ้มค่า
-      bool matchesValue = (value == 'ความคุ้มค่า') ||
-          (value == 'น้อยไปมาก' && product['value'] >= 0) ||
-          (value == 'มากไปน้อย' && product['value'] >= 0);
-
-      return matchesShop && matchesCategory && matchesValue;
+      return matchesShop && matchesCategory;
     }).toList();
 
-    // จัดเรียงสินค้าตามราคาที่เลือก
+    // เรียงสินค้าตาม value ถ้าเลือก
+    if (value == 'น้อยไปมาก') {
+      tempProducts.sort((a, b) =>
+          (double.tryParse(a['value'].toString()) ?? 0.0)
+              .compareTo(double.tryParse(b['value'].toString()) ?? 0.0));
+    } else if (value == 'มากไปน้อย') {
+      tempProducts.sort((a, b) =>
+          (double.tryParse(b['value'].toString()) ?? 0.0)
+              .compareTo(double.tryParse(a['value'].toString()) ?? 0.0));
+    }
+
+    // เรียงสินค้าตามราคา ถ้าเลือก
     if (price == 'น้อยไปมาก') {
       tempProducts.sort((a, b) => a['price'].compareTo(b['price']));
     } else if (price == 'มากไปน้อย') {
