@@ -107,7 +107,7 @@ class _HomepageState extends State<Homepage> {
                 fetchedProducts.add({
                   'title': product['title'] ?? 'ไม่มีชื่อ',
                   'url': product['url'] ?? '',
-                  'urlImage': product['image'] ?? '',
+                  'image': product['image'] ?? '',
                   'price': product['price'] ?? 0,
                   'unit': product['unit'] ?? '',
                   'stockStatus': product['stockStatus'] ?? '',
@@ -127,7 +127,7 @@ class _HomepageState extends State<Homepage> {
                 fetchedProducts.add({
                   'title': product['title'] ?? 'ไม่มีชื่อ',
                   'url': product['url'] ?? '',
-                  'urlImage': product['image'] ?? '',
+                  'image': product['image'] ?? '',
                   'price': product['price'] ?? 0,
                   'unit': product['unit'] ?? '',
                   'stockStatus': product['stockStatus'] ?? '',
@@ -162,7 +162,7 @@ class _HomepageState extends State<Homepage> {
                     fetchedProducts.add({
                       'title': product['title'] ?? 'ไม่มีชื่อ',
                       'url': product['url'] ?? '',
-                      'urlImage': product['image'] ?? '',
+                      'image': product['image'] ?? '',
                       'price': product['price'] ?? 0,
                       'unit': product['unit'] ?? '',
                       'stockStatus': product['stockStatus'] ?? '',
@@ -183,7 +183,7 @@ class _HomepageState extends State<Homepage> {
                     fetchedProducts.add({
                       'title': product['title'] ?? 'ไม่มีชื่อ',
                       'url': product['url'] ?? '',
-                      'urlImage': product['image'] ?? '',
+                      'image': product['image'] ?? '',
                       'price': product['price'] ?? 0,
                       'unit': product['unit'] ?? '',
                       'stockStatus': product['stockStatus'] ?? '',
@@ -290,7 +290,7 @@ class _HomepageState extends State<Homepage> {
       await bookmarksRef.add({
         'title': data['title'],
         'url': data['url'],
-        'urlImage': data['urlImage'],
+        'image': data['image'],
         'price': data['price'],
         'unit': data['unit'],
         'stockStatus': data['stockStatus'],
@@ -349,7 +349,6 @@ class _HomepageState extends State<Homepage> {
 
     try {
       // บันทึกข้อมูลใน collection 'historys'
-      String imageUrl = data['urlImage'] ?? data['image'];
 
       await firestore
           .collection('users')
@@ -358,7 +357,7 @@ class _HomepageState extends State<Homepage> {
           .add({
         'title': data['title'],
         'url': data['url'],
-        'urlImage': imageUrl, // ใช้แบบนี้เพราะค่าใน Redis เก็บเป็น image แต่ history ใน firestore เป็น urlImage เลยต้องเลือกอันใดอันนึง
+        'image': data['image'], // ใช้แบบนี้เพราะค่าใน Redis เก็บเป็น image แต่ history ใน firestore เป็น urlImage เลยต้องเลือกอันใดอันนึง
         'price': data['price'],
         'unit': data['unit'],
         'stockStatus': data['stockStatus'],
@@ -577,6 +576,7 @@ class _HomepageState extends State<Homepage> {
                     itemBuilder: (context, index) {
                       final data = filteredProducts[index];
                       bool isOutOfStock = data['stockStatus'] != 'Y' && data['stockStatus'] != 'IN_STOCK';
+                      print("🔍 Debug data: $data"); // ✅ เพิ่มบรรทัดนี้
 
                       return Container(
                         color: isOutOfStock ? Colors.grey[300] : null,
@@ -592,7 +592,7 @@ class _HomepageState extends State<Homepage> {
                                   child: Stack(
                                     children: [
                                       Image.network(
-                                        data['urlImage'],
+                                        data['image'],
                                         height: 150,
                                         width: double.infinity,
                                         fit: BoxFit.cover,

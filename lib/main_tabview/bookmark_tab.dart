@@ -44,7 +44,6 @@ class _BookmarksPageState extends State<BookmarksPage> {
 
     try {
       // บันทึกข้อมูลใน collection 'historys'
-      String imageUrl = data['urlImage'] ?? data['image'];
 
       await firestore
           .collection('users')
@@ -53,7 +52,7 @@ class _BookmarksPageState extends State<BookmarksPage> {
           .add({
         'title': data['title'],
         'url': data['url'],
-        'urlImage': imageUrl, // ใช้แบบนี้เพราะค่าใน Redis เก็บเป็น image แต่ history ใน firestore เป็น urlImage เลยต้องเลือกอันใดอันนึง
+        'image': data['image'], // ใช้แบบนี้เพราะค่าใน Redis เก็บเป็น image แต่ history ใน firestore เป็น urlImage เลยต้องเลือกอันใดอันนึง
         'price': data['price'],
         'unit': data['unit'],
         'stockStatus': data['stockStatus'],
@@ -195,7 +194,7 @@ class _BookmarksPageState extends State<BookmarksPage> {
                   margin: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
                   child: ListTile(
                     leading: Image.network(
-                        data['urlImage'],
+                        data['image'],
                         width: 70,
                         height: 70,
                         fit: BoxFit.cover

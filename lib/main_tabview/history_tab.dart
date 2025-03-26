@@ -162,9 +162,9 @@ class _HistoryPageState extends State<HistoryPage> {
                 return Card(
                   margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
                   child: ListTile(
-                    leading: order['urlImage'] != null && order['urlImage'] != ''
+                    leading: order['image'] != null
                         ? Image.network(
-                      order['urlImage'],
+                      order['image'],
                       width: 70,
                       height: 70,
                       fit: BoxFit.cover,

@@ -266,7 +266,7 @@ class _Search_ProductState extends State<Search_Product> {
       await bookmarksRef.add({
         'title': data['title'],
         'url': data['url'],
-        'urlImage': data['urlImage'] ?? data['image'], // เช็คถ้า urlImage เป็น null ให้ใช้ image แทน
+        'image': data['image'],
         'price': data['price'],
         'unit': data['unit'],
         'stockStatus': data['stockStatus'],
@@ -325,7 +325,6 @@ class _Search_ProductState extends State<Search_Product> {
 
     try {
       // บันทึกข้อมูลใน collection 'historys'
-      String imageUrl = data['urlImage'] ?? data['image'];
 
       await firestore
           .collection('users')
@@ -334,7 +333,7 @@ class _Search_ProductState extends State<Search_Product> {
           .add({
         'title': data['title'],
         'url': data['url'],
-        'urlImage': imageUrl, // ใช้แบบนี้เพราะค่าใน Redis เก็บเป็น image แต่ history ใน firestore เป็น urlImage เลยต้องเลือกอันใดอันนึง
+        'image': data['image'], // ใช้แบบนี้เพราะค่าใน Redis เก็บเป็น image แต่ history ใน firestore เป็น urlImage เลยต้องเลือกอันใดอันนึง
         'price': data['price'],
         'unit': data['unit'],
         'stockStatus': data['stockStatus'],
@@ -639,9 +638,9 @@ class _Search_ProductState extends State<Search_Product> {
                         Padding(
                           padding: const EdgeInsets.all(8.0),
                           child: ListTile(
-                            leading: ((data['urlImage']?.isNotEmpty ?? false) ? data['urlImage'] : data['image'])?.isNotEmpty ?? false
+                            leading: data['image'] != null
                                 ? Image.network(
-                              (data['urlImage']?.isNotEmpty ?? false) ? data['urlImage'] : data['image'],
+                              data['image'],
                               height: 60,
                               width: 60,
                               fit: BoxFit.cover,
