@@ -212,7 +212,7 @@ class _TextDetectionScreenState extends State<TextDetectionScreen> {
                 child: ListTile(
                   contentPadding: EdgeInsets.all(10),
                   leading: Image.network(
-                    data.urlImage,
+                    data.image,
                     width: 60,
                     height: 60,
                     fit: BoxFit.cover,
@@ -274,7 +274,6 @@ class _TextDetectionScreenState extends State<TextDetectionScreen> {
 
     try {
       // บันทึกข้อมูลใน collection 'historys'
-      String imageUrl = data.urlImage;
 
       await firestore
           .collection('users')
@@ -283,7 +282,7 @@ class _TextDetectionScreenState extends State<TextDetectionScreen> {
           .add({
         'title': data.title,
         'url': data.url,
-        'urlImage': imageUrl, // ใช้แบบนี้เพราะค่าใน Redis เก็บเป็น image แต่ history ใน firestore เป็น urlImage เลยต้องเลือกอันใดอันนึง
+        'image': data.image, // ใช้แบบนี้เพราะค่าใน Redis เก็บเป็น image แต่ history ใน firestore เป็น urlImage เลยต้องเลือกอันใดอันนึง
         'price': data.price,
         'unit': data.unit,
         'stockStatus': data.stockStatus,
@@ -387,13 +386,13 @@ class _TextDetectionScreenState extends State<TextDetectionScreen> {
 }
 
 class Data {
-  final String url, title, urlImage, unit, stockStatus, shop;
+  final String url, title, image, unit, stockStatus, shop;
   final double price, value;
 
   Data({
     required this.url,
     required this.title,
-    required this.urlImage,
+    required this.image,
     required this.price,
     required this.unit,
     required this.stockStatus,
@@ -405,7 +404,7 @@ class Data {
     return Data(
       url: map['url'] ?? '',
       title: map['title'] ?? '',
-      urlImage: map['image'] ?? '',
+      image: map['image'] ?? '',
       price: (map['price'] is int) ? (map['price'] as int).toDouble() : double.tryParse(map['price'].toString()) ?? 0.0,
       unit: map['unit'] ?? '',
       stockStatus: map['stockStatus'] ?? '',
@@ -419,7 +418,7 @@ class Data {
     return {
       'title': title,
       'url': url,
-      'urlImage': urlImage,
+      'image': image,
       'price': price,
       'unit': unit,
       'stockStatus': stockStatus,
