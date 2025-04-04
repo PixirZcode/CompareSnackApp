@@ -136,7 +136,7 @@ class _ProfileTabState extends State<ProfileTab> {
                 child: const Text("แก้ไขสิ่งที่คุณชอบ"),
               ),
 
-              const SizedBox(height: 250),
+              const SizedBox(height: 350),
 
               /// ปุ่มออกจากระบบ
               OutlinedButton(

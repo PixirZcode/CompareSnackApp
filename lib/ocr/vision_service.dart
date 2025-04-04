@@ -64,7 +64,7 @@ class VisionService {
 
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse('http://10.0.0.85:3000/remove-bg'),
+        Uri.parse('http://10.0.0.51:3000/remove-bg'),
       );
 
       request.files.add(await http.MultipartFile.fromPath('image', image.path));

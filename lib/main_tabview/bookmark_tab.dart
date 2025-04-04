@@ -52,7 +52,7 @@ class _BookmarksPageState extends State<BookmarksPage> {
           .add({
         'title': data['title'],
         'url': data['url'],
-        'image': data['image'], // ใช้แบบนี้เพราะค่าใน Redis เก็บเป็น image แต่ history ใน firestore เป็น urlImage เลยต้องเลือกอันใดอันนึง
+        'image': data['image'],
         'price': data['price'],
         'unit': data['unit'],
         'stockStatus': data['stockStatus'],

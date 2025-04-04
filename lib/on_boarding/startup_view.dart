@@ -58,7 +58,7 @@ class _StarupViewState extends State<StartupView> {
 
   // ฟังก์ชันดึงข้อมูลสินค้าจาก BigC API
   Future<List<Map<String, dynamic>>> fetchBigcData() async {
-    final response = await http.get(Uri.parse('http://10.0.0.85:3000/scrap?site=bigc'));
+    final response = await http.get(Uri.parse('http://10.0.0.51:3000/scrap?site=bigc'));
     if (response.statusCode == 200) {
       List<dynamic> data = json.decode(response.body);
       return List<Map<String, dynamic>>.from(data.map((item) => item as Map<String, dynamic>));
@@ -69,7 +69,7 @@ class _StarupViewState extends State<StartupView> {
 
   // ฟังก์ชันดึงข้อมูลสินค้าจาก Lotus API
   Future<List<Map<String, dynamic>>> fetchLotusData() async {
-    final response = await http.get(Uri.parse('http://10.0.0.85:3000/scrap?site=lotus'));
+    final response = await http.get(Uri.parse('http://10.0.0.51:3000/scrap?site=lotus'));
     if (response.statusCode == 200) {
       List<dynamic> data = json.decode(response.body);
       return List<Map<String, dynamic>>.from(data.map((item) => item as Map<String, dynamic>));
@@ -80,8 +80,8 @@ class _StarupViewState extends State<StartupView> {
 
   // ฟังก์ชันดึงข้อมูลโปรโมชันจากทั้ง BigC และ Lotus
   Future<List<Map<String, dynamic>>> fetchPromotions() async {
-    final responseBigc = await http.get(Uri.parse('http://10.0.0.85:3000/promotions?site=bigc'));
-    final responseLotus = await http.get(Uri.parse('http://10.0.0.85:3000/promotions?site=lotus'));
+    final responseBigc = await http.get(Uri.parse('http://10.0.0.51:3000/promotions?site=bigc'));
+    final responseLotus = await http.get(Uri.parse('http://10.0.0.51:3000/promotions?site=lotus'));
 
     List<Map<String, dynamic>> promotions = [];
 

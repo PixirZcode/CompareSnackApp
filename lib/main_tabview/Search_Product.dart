@@ -45,7 +45,7 @@ class _Search_ProductState extends State<Search_Product> {
   Future<void> initRedis() async {
     try {
       // เชื่อมต่อกับ Redis server (เช่นที่ localhost:6379)
-      redisClient = await redisConnection.connect('10.0.0.85', 6379);
+      redisClient = await redisConnection.connect('10.0.0.51', 6379);
       print("✔ เชื่อมต่อกับ Redis สำเร็จ");
     } catch (e) {
       print("❌ ERROR: ไม่สามารถเชื่อมต่อ Redis: $e");

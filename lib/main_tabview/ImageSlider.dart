@@ -40,10 +40,10 @@ class _ImagesliderState extends State<Imageslider> {
   Future<void> _fetchPromotions() async {
     try {
       // ดึงโปรโมชั่นจาก BigC (จำกัดแค่ 3 รายการ)
-      final responseBigC = await http.get(Uri.parse('http://10.0.0.85:3000/promotions?site=bigc'));
+      final responseBigC = await http.get(Uri.parse('http://10.0.0.51:3000/promotions?site=bigc'));
 
       // ดึงโปรโมชั่นจาก Lotus (จำกัดแค่ 3 รายการ)
-      final responseLotus = await http.get(Uri.parse('http://10.0.0.85:3000/promotions?site=lotus'));
+      final responseLotus = await http.get(Uri.parse('http://10.0.0.51:3000/promotions?site=lotus'));
 
       if (responseBigC.statusCode == 200 && responseLotus.statusCode == 200) {
         final dataBigC = json.decode(responseBigC.body);

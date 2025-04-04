@@ -12,7 +12,7 @@ RedisConnection redisConnection = RedisConnection();
 Future<void> initRedis() async {
   try {
     // เชื่อมต่อกับ Redis server (เช่นที่ localhost:6379)
-    redisClient = await redisConnection.connect('10.0.0.85', 6379);
+    redisClient = await redisConnection.connect('10.0.0.51', 6379);
     print("✔ เชื่อมต่อกับ Redis สำเร็จ");
   } catch (e) {
     print("❌ ERROR: ไม่สามารถเชื่อมต่อ Redis: $e");
@@ -39,7 +39,7 @@ Future<void> openUrlAndSaveOrder(Map<String, dynamic> data) async {
         .add({
       'title': data['title'],
       'url': data['url'],
-      'image': data['image'], // ใช้แบบนี้เพราะค่าใน Redis เก็บเป็น image แต่ history ใน firestore เป็น urlImage เลยต้องเลือกอันใดอันนึง
+      'image': data['image'],
       'price': data['price'],
       'unit': data['unit'],
       'stockStatus': data['stockStatus'],
@@ -61,6 +61,17 @@ Future<void> openUrlAndSaveOrder(Map<String, dynamic> data) async {
 }
 
 void showComparisonSheet(BuildContext context, String productName) async {
+
+  if (redisClient == null) {
+    print("🔎 เชื่อมต่อ Redis");
+    await initRedis();
+  }
+
+  if (redisClient == null) {
+    print("❌ Redis เป็น null ข้ามการทำงาน");
+    return;
+  }
+
   try {
     List<Map<String, dynamic>> similarProducts = [];
     double similarityThreshold = 0.6; // ตั้งค่าความคล้ายที่ 60% สูงกว่านี้อาจจะไม่ค่อยเจอ
@@ -71,7 +82,7 @@ void showComparisonSheet(BuildContext context, String productName) async {
       final redisLotus = await redisClient!.get('product:lotus');
 
       if (redisBigc != null || redisLotus != null) {
-        print("✔ ค้นหาข้อมูลใน Redis");
+        print("✔ ค้นหาข้อมูลใน Redis BigC และ Lotus");
 
         List<dynamic> bigcData = redisBigc != null ? jsonDecode(redisBigc) : [];
         List<dynamic> lotusData = redisLotus != null ? jsonDecode(redisLotus) : [];
