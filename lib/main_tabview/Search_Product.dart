@@ -211,30 +211,41 @@ class _Search_ProductState extends State<Search_Product> {
       bool matchesCategory = (category == 'หมวดหมู่') ||
           (category == 'ชิ้น' && product['unit'] != 'แพ็ค') ||
           (category == 'แพ็ค' && product['unit'] == 'แพ็ค');
-
       return matchesShop && matchesCategory;
     }).toList();
 
-    // เรียงสินค้าตาม value ถ้าเลือก
-    if (value == 'น้อยไปมาก') {
-      tempProducts.sort((a, b) =>
-          (double.tryParse(a['value'].toString()) ?? 0.0)
-              .compareTo(double.tryParse(b['value'].toString()) ?? 0.0));
-    } else if (value == 'มากไปน้อย') {
-      tempProducts.sort((a, b) =>
-          (double.tryParse(b['value'].toString()) ?? 0.0)
-              .compareTo(double.tryParse(a['value'].toString()) ?? 0.0));
+    // แยกสินค้า bookmark และไม่ bookmark
+    List<Map<String, dynamic>> bookmarked = tempProducts.where((p) => p['isBookmarked'] == true).toList();
+    List<Map<String, dynamic>> notBookmarked = tempProducts.where((p) => p['isBookmarked'] != true).toList();
+
+    // ฟังก์ชันสำหรับเรียงลำดับ
+    void sortList(List<Map<String, dynamic>> list) {
+      if (value == 'น้อยไปมาก') {
+        list.sort((a, b) =>
+            (double.tryParse(a['value'].toString()) ?? 0.0)
+                .compareTo(double.tryParse(b['value'].toString()) ?? 0.0));
+      } else if (value == 'มากไปน้อย') {
+        list.sort((a, b) =>
+            (double.tryParse(b['value'].toString()) ?? 0.0)
+                .compareTo(double.tryParse(a['value'].toString()) ?? 0.0));
+      }
+
+      if (price == 'น้อยไปมาก') {
+        list.sort((a, b) => (a['price'] ?? 0).compareTo(b['price'] ?? 0));
+      } else if (price == 'มากไปน้อย') {
+        list.sort((a, b) => (b['price'] ?? 0).compareTo(a['price'] ?? 0));
+      }
     }
 
-    // เรียงสินค้าตามราคา ถ้าเลือก
-    if (price == 'น้อยไปมาก') {
-      tempProducts.sort((a, b) => a['price'].compareTo(b['price']));
-    } else if (price == 'มากไปน้อย') {
-      tempProducts.sort((a, b) => b['price'].compareTo(a['price']));
-    }
+    // เรียงทั้ง 2 กลุ่มแยกกัน
+    sortList(bookmarked);
+    sortList(notBookmarked);
+
+    // รวมกลับ
+    List<Map<String, dynamic>> sortedProducts = [...bookmarked, ...notBookmarked];
 
     setState(() {
-      filteredProducts = tempProducts;
+      filteredProducts = sortedProducts;
     });
   }
 

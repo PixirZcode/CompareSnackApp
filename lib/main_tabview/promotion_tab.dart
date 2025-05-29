@@ -27,7 +27,7 @@ class _promotionState extends State<promotion> {
 
   Future<void> _fetchPromotions() async {
     try {
-      final bigCResponse = await http.get(Uri.parse('http://10.0.0.85:3000/promotions?site=bigc'));
+      final bigCResponse = await http.get(Uri.parse('http://10.0.0.51:3000/promotions?site=bigc'));
       if (bigCResponse.statusCode == 200) {
         final List<dynamic> bigCData = json.decode(bigCResponse.body);
         setState(() {
@@ -35,7 +35,7 @@ class _promotionState extends State<promotion> {
         });
       }
 
-      final lotusResponse = await http.get(Uri.parse('http://10.0.0.85:3000/promotions?site=lotus'));
+      final lotusResponse = await http.get(Uri.parse('http://10.0.0.51:3000/promotions?site=lotus'));
       if (lotusResponse.statusCode == 200) {
         final List<dynamic> lotusData = json.decode(lotusResponse.body);
         setState(() {
