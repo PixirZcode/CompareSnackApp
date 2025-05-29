@@ -17,7 +17,7 @@ Backend (ฝั่งเซิร์ฟเวอร์ / API & Logic)
 - Google Cloud Vision API
 ใช้ดึงข้อความจากภาพ (OCR) จากรูปที่ผู้ใช้ส่งเข้ามาแล้วนำไปค้นหา
 
-Database & Services (เก็บข้อมูลและบริการเสริม)
+Database (เก็บข้อมูล)
 - Firebase Authentication
 จัดการระบบล็อกอินและลงทะเบียนผู้ใช้
 - Firebase Firestore
