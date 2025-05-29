@@ -13,7 +13,7 @@ Backend
 - Node.js + Express 
 รัน Server เช่น API, การจัดการคำขอ, logic ต่างๆ
 - Redis
-เก็บข้อมูล cache เพื่อเร่งความเร็วการตอบสนองของ server และลดค่า cost
+เก็บ Cache ข้อมูลเพื่อเร่งความเร็วการตอบสนองของ server และลดค่า cost
 - Google Cloud Vision API
 ใช้ดึงข้อความจากภาพ (OCR) จากรูปที่ผู้ใช้ส่งเข้ามาแล้วนำไปค้นหา
 
