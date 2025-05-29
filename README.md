@@ -10,7 +10,8 @@ Frontend
 - Dart (ภาษาโปรแกรมที่ใช้กับ Flutter)
 
 Backend
-- Node.js
+- Node.js + Express
+
 รัน Server เช่น API, การจัดการคำขอ, logic ต่างๆ
 - Redis
 เก็บข้อมูล cache เพื่อเร่งความเร็วการตอบสนองของ server และลดค่า cost
