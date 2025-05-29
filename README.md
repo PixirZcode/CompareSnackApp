@@ -4,12 +4,12 @@
 
 ## ภาษาที่ใช้ในการพัฒนาระบบ
 
-Frontend (ฝั่งผู้ใช้ / แอปมือถือ)
+Frontend
 - Flutter (ใน Android Studio)
 ใช้พัฒนา UX/UI และ logic ฝั่งแอปมือถือ (Android/iOS)
 - Dart (ภาษาโปรแกรมที่ใช้กับ Flutter)
 
-Backend (ฝั่งเซิร์ฟเวอร์ / API & Logic)
+Backend
 - Node.js
 รัน Server เช่น API, การจัดการคำขอ, logic ต่างๆ
 - Redis
@@ -17,7 +17,7 @@ Backend (ฝั่งเซิร์ฟเวอร์ / API & Logic)
 - Google Cloud Vision API
 ใช้ดึงข้อความจากภาพ (OCR) จากรูปที่ผู้ใช้ส่งเข้ามาแล้วนำไปค้นหา
 
-Database (เก็บข้อมูล)
+Database
 - Firebase Authentication
 จัดการระบบล็อกอินและลงทะเบียนผู้ใช้
 - Firebase Firestore
