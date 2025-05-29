@@ -1,16 +1,25 @@
-# project
+# แอปเปรียบเทียบความคุ้มค่าสินค้าจากแหล่งสินค้าอื่นๆ
 
-A new Flutter project.
+ค้นหาสินค้าชนิดเดียวกันโดยหาว่าสินค้าไหนถูกสุด คำนวณจาก บาท/กรัม
 
-## Getting Started
+## ภาษาที่ใช้ในการพัฒนาระบบ
 
-This project is a starting point for a Flutter application.
+Frontend (ฝั่งผู้ใช้ / แอปมือถือ)
+- Flutter (ใน Android Studio)
+ใช้พัฒนา UX/UI และ logic ฝั่งแอปมือถือ (Android/iOS)
+- Dart (ภาษาโปรแกรมที่ใช้กับ Flutter)
 
-A few resources to get you started if this is your first Flutter project:
+Backend (ฝั่งเซิร์ฟเวอร์ / API & Logic)
+- Node.js
+รัน Server เช่น API, การจัดการคำขอ, logic ต่างๆ
+- Redis
+เก็บข้อมูล cache เพื่อเร่งความเร็วการตอบสนองของ server และลดค่า cost
+- Google Cloud Vision API
+ใช้ดึงข้อความจากภาพ (OCR) จากรูปที่ผู้ใช้ส่งเข้ามาแล้วนำไปค้นหา
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+Database & Services (เก็บข้อมูลและบริการเสริม)
+- Firebase Authentication
+จัดการระบบล็อกอินและลงทะเบียนผู้ใช้
+- Firebase Firestore
+ฐานข้อมูล NoSQL เก็บข้อมูลผู้ใช้ เช่น รายการบุ๊กมาร์ก, ประวัติการสั่งซื้อ, ข้อมูลสินค้าต่างๆ
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
