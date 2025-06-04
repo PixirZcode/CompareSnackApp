@@ -23,4 +23,4 @@ Database
 - Firebase Firestore
 ฐานข้อมูล NoSQL เก็บข้อมูลผู้ใช้ เช่น รายการบุ๊กมาร์ก, ประวัติการสั่งซื้อ, ข้อมูลสินค้าต่างๆ
 
-![image_resized_800x600](https://github.com/user-attachments/assets/8f575234-dc06-4418-a85d-5f98a04fa47c)
+![image (1)](https://github.com/user-attachments/assets/2a13ac73-88aa-4fef-b72e-cff93c9fb10a)
