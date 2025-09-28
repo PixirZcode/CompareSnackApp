@@ -24,3 +24,5 @@ Database
 ฐานข้อมูล NoSQL เก็บข้อมูลผู้ใช้ เช่น รายการบุ๊กมาร์ก, ประวัติการสั่งซื้อ, ข้อมูลสินค้าต่างๆ
 
 ![image (1)](https://github.com/user-attachments/assets/2a13ac73-88aa-4fef-b72e-cff93c9fb10a)
+<img width="295" height="627" alt="image" src="https://github.com/user-attachments/assets/218f1818-0f9c-497f-baac-6555f9bb9655" />
+
